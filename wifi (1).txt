@@ -1,0 +1,150 @@
+#include "config.h"
+#include <ESP8266WiFi.h>
+#include <DNSServer.h>
+#include <ESP8266WebServer.h>
+#include <WiFiManager.h> 
+#include <SoftwareSerial.h>
+SoftwareSerial swSer(D3, D4, false, 256);
+String response;
+String st11 = "House is Protected";
+
+int current = 0;
+int last = -1;
+
+AdafruitIO_Feed *st1 = io.feed("st1");
+
+void setup() 
+{
+  Serial.begin(9600);
+  swSer.begin(9600);
+  WiFiManager wifiManager;
+  wifiManager.autoConnect("AutoConnectAP");
+  Serial.println("connected...:)");
+  Serial.println("");
+  Serial.println("WiFi connected");  
+  Serial.println("IP address: ");
+  Serial.print("Connecting to Adafruit IO");
+  io.connect();
+  while(io.status() < AIO_CONNECTED) {
+   Serial.print(".");
+   delay(500);
+  }
+  Serial.println();
+  Serial.println(io.statusText());
+  delay(2000);
+  pinMode(LED_BUILTIN, OUTPUT);
+  for(int i=0;i<5;i++)
+  {
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(100);  
+    digitalWrite(LED_BUILTIN, HIGH); 
+    delay(100); 
+  }
+  st1->save(st11);
+}
+
+int ESPwait(String stopstr, int timeout_secs)
+{
+  bool found = false;
+  char c;
+  long timer_init;
+  long timer;
+
+  response="";
+  timer_init = millis();
+  while (!found) {
+    timer = millis();
+    if (((timer - timer_init) / 1000) > timeout_secs) { // Timeout?
+      Serial.println("!Timeout!");
+      return 0;  // timeout
+    }
+    if (swSer.available()) {
+      c = swSer.read();
+      //Serial.print(c);
+      response += c;
+      if (response.endsWith(stopstr)) {
+        found = true;
+        delay(10);
+        swSer.flush();
+        Serial.flush();
+        Serial.println();
+      }
+    } // end Serial1_available()
+  } // end while (!found)
+  return 1;
+}
+
+int ESPwait1(String stopstr, int timeout_secs)
+{
+  bool found = false;
+  char c;
+  long timer_init;
+  long timer;
+
+  response="";
+  timer_init = millis();
+  while (!found) {
+    timer = millis();
+    if (((timer - timer_init) / 1000) > timeout_secs) { // Timeout?
+      Serial.println("!Timeout!");
+      return 0;  // timeout
+    }
+    if (Serial.available()) {
+      c = Serial.read();
+      //Serial.print(c);
+      response += c;
+      if (response.endsWith(stopstr)) {
+        found = true;
+        delay(10);
+        Serial.flush();
+        Serial.println();
+      }
+    } // end Serial1_available()
+  } // end while (!found)
+  return 1;
+}
+
+
+void loop() 
+{
+ char c;
+ io.run();
+if(swSer.available())
+  {
+  c=swSer.read();
+  Serial.println(c);
+  if(c=='*')
+    {
+      if(ESPwait("#",3))
+      {
+      char * strtokIndx;
+      response.remove(response.length()-1); 
+       response=""; 
+       Serial.println("sending -> ");
+      }
+    }
+  }
+  if(Serial.available())
+  {
+    
+  c=Serial.read();
+  Serial.println(c);
+  if(c=='*')
+    {
+      if(ESPwait1("#",3))
+      {
+      char * strtokIndx;
+     //response.remove(response.length()-1);
+     Serial.println(response);
+     if(response.endsWith("1#"))
+     {
+  st11 = "Intrusion Detected";
+  st1->save(st11);
+  Serial.println("Sending");
+     }
+   response=""; 
+  }
+ }
+}
+}
+
